@@ -14,7 +14,7 @@ class MyOptions(PipelineOptions):
 
 
 class Split(beam.DoFn):
-    def process(self, element, *args, **kwargs):
+    def process(self, element):
         Date, Open, High, Low, Close, Volume = element.split(",")
         return[{
             "Open": float(Open),
@@ -23,9 +23,16 @@ class Split(beam.DoFn):
 
 
 class CollectOpen(beam.DoFn):
-    def process(self, element, *args, **kwargs):
+    def process(self, element):
         # Returns a list of tuples containing Date and Open value
         result = [(1, element["Open"])]
+        return result
+
+
+class CollectClose(beam.ParDo):
+    def process(self, element):
+        # Returns a list of tuples containing Date and Close value
+        result = [(1, element["Close"])]
         return result
 
 
@@ -44,14 +51,30 @@ csv_lines = (p | ReadFromText(input_filename, skip_header_lines=1)
 
 # The GroupByKey function allows to create a PCollection of all
 # elements for which the key (ie the left side of the tuples) is the same.
-mean_open = (csv_lines | beam.ParDo(CollectOpen())
-             | "Grouping keys open" >> beam.GroupByKey()
-             | "Calculating means for open" >> beam.CombineValues(
-            beam.combiners.MeanCombineFn()
+mean_open = (
+    csv_lines | beam.ParDo(CollectOpen())
+    | "Grouping keys Open" >> beam.GroupByKey()
+    | "Calculating mean for Open" >> beam.CombineValues(
+        beam.combiners.MeanCombineFn()
         )
 )
 
-# Output results
+# Let's apply a different transform on read files
+mean_close = (
+    csv_lines | beam.ParDo(CollectClose())
+    | "Grouping keys Close" >> beam.GroupByKey()
+    | "Calculating mean for Close" >> beam.CombineValues(
+        beam.combiners.MeanCombineFn()
+        )
+)
+
+# We have two PCollection mean_open and mean_close
+# Let's combine them before we write them to an output
+
 output = (
-    mean_open | beam.io.WriteToText(output_filename)
+    {
+        "Mean Open": mean_open,
+        "Mean Close": mean_close
+    } | beam.CoGroupByKey()
+    | beam.io.WriteToText(output_filename))
 )
