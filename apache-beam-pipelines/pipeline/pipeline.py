@@ -44,7 +44,7 @@ options = PipelineOptions()
 p = beam.Pipeline(options=options)
 
 # Read input csv file
-csv_lines = (p | ReadFromText(input_filename, skip_header_lines=1)
+csv_lines = (p | beam.io.ReadFromText(input_filename, skip_header_lines=1)
              | beam.ParDo(Split())
              | beam.io.WriteToText(output_filename)
              )
@@ -76,5 +76,5 @@ output = (
         "Mean Open": mean_open,
         "Mean Close": mean_close
     } | beam.CoGroupByKey()
-    | beam.io.WriteToText(output_filename))
+    | beam.io.WriteToText(output_filename)
 )
