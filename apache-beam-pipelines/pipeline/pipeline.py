@@ -44,7 +44,6 @@ csv_lines = (p | ReadFromText(input_filename, skip_header_lines=1)
 
 # The GroupByKey function allows to create a PCollection of all
 # elements for which the key (ie the left side of the tuples) is the same.
-
 mean_open = (csv_lines | beam.ParDo(CollectOpen())
              | "Grouping keys open" >> beam.GroupByKey()
              | "Calculating means for open" >> beam.CombineValues(
@@ -52,4 +51,7 @@ mean_open = (csv_lines | beam.ParDo(CollectOpen())
         )
 )
 
-
+# Output results
+output = (
+    mean_open | beam.io.WriteToText(output_filename)
+)
