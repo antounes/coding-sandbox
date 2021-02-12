@@ -36,45 +36,38 @@ class CollectClose(beam.ParDo):
         return result
 
 
-# Pipeline is to be written in blocks rather than in chain
-# so that we can add future transformations
+if __name__ == "__main__":
+    MyOptions = PipelineOptions()
+    input_filename = "../data/all_stocks_5yr.csv"
+    output_filename = "../output/results"
 
-# Init pipeline
-options = PipelineOptions()
-p = beam.Pipeline(options=options)
-
-# Read input csv file
-csv_lines = (p | beam.io.ReadFromText(input_filename, skip_header_lines=1)
-             | beam.ParDo(Split())
-             | beam.io.WriteToText(output_filename)
-             )
-
-# The GroupByKey function allows to create a PCollection of all
-# elements for which the key (ie the left side of the tuples) is the same.
-mean_open = (
-    csv_lines | beam.ParDo(CollectOpen())
-    | "Grouping keys Open" >> beam.GroupByKey()
-    | "Calculating mean for Open" >> beam.CombineValues(
-        beam.combiners.MeanCombineFn()
+    with beam.Pipeline(options=MyOptions) as p:
+        r_input = (
+                p | "Read input file" >> beam.io.ReadFromText(input_filename, skip_header_lines=1)
+                | "Split elements of each line" >> beam.ParDo(Split())
         )
-)
 
-# Let's apply a different transform on read files
-mean_close = (
-    csv_lines | beam.ParDo(CollectClose())
-    | "Grouping keys Close" >> beam.GroupByKey()
-    | "Calculating mean for Close" >> beam.CombineValues(
-        beam.combiners.MeanCombineFn()
+        mean_open = (
+                r_input | "Collect only elements relative to the Open data" >> beam.ParDo(CollectOpen())
+                | "Group keys Open" >> beam.GroupByKey()
+                | "Calculate mean for Open data" >> beam.CombineValues(
+                    beam.combiners.MeanCombineFn()
+                )
         )
-)
 
-# We have two PCollection mean_open and mean_close
-# Let's combine them before we write them to an output
+        mean_close = (
+                r_input | "Collect only elements relative to the Close data" >> beam.ParDo(CollectClose())
+                | "Group keys Close" >> beam.GroupByKey()
+                | "Calculate mean for Close data" >> beam.CombineValues(
+                    beam.combiners.MeanCombineFn()
+                )
+        )
 
-output = (
-    {
-        "Mean Open": mean_open,
-        "Mean Close": mean_close
-    } | beam.CoGroupByKey()
-    | beam.io.WriteToText(output_filename)
-)
+        r_output = (
+            {
+                "Mean Open": mean_open,
+                "Mean Close": mean_close
+            }
+            | "Group output by keys" >> beam.CoGroupByKey()
+            | "Write output to text file" >> beam.io.WriteToText(output_filename, file_name_suffix=".txt")
+        )
